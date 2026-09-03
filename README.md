@@ -90,7 +90,7 @@ Example: an agent searches for a product, fetches its details, adds the selected
 
 ## 12. State-Aware Tool Exposure
 
-The current implementation registers the complete fixed tool set when WebMCP is available. The origin API remains state-aware: unauthenticated requests fail safely, and cart, wishlist, and order data is scoped to the active browser session.
+The bridge checks [`/api/auth/session`](https://github.com/misbah7172/AgentBridge--External-WebMCP-Powered-E-Commerce-Platform-NoAPI/blob/main/app/api/auth/session/route.ts) before registration. Signed-out pages expose only the six public discovery tools: product search, product details, filtering, sorting, recommendations, and shipping estimates. After a user signs in and navigates or refreshes, the bridge registers the remaining 13 session-bound cart, wishlist, order, coupon, and checkout tools. The origin API independently enforces the same authorization boundary.
 
 ## 13. Error Handling & Safety
 
@@ -122,7 +122,7 @@ Planned E2E flow: Worker injects bridge → browser discovers tools → agent se
 
 ## 20. WebMCP Inspector Validation
 
-Planned validation will use a WebMCP-capable browser inspector to confirm 19 registrations, schema visibility, tool invocation, and registration cleanup on `pagehide`.
+Planned validation will use a WebMCP-capable browser inspector to confirm six signed-out registrations, 19 signed-in registrations, schema visibility, tool invocation, and registration cleanup on `pagehide`.
 
 ## 21. Evaluation Metrics
 
