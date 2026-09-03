@@ -3,5 +3,5 @@ main = "worker/index.ts"
 compatibility_date = "2026-09-02"
 
 [vars]
-TARGET_ORIGIN = "http://localhost:3000"
-# For production, attach this Worker to an AgentBridge NoAPI hostname route and set ORIGIN_UPSTREAM to the origin application.
+TARGET_ORIGIN = "https://agentbridge-webmcp-noapi-adapter.agentbridge-noapi.workers.dev"
+ORIGIN_UPSTREAM = "https://agentbridge-external-webmcp-powered-e.onrender.com"
