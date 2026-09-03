@@ -42,6 +42,12 @@ WebMCP provides explicit actions, schemas, and descriptions instead of relying o
 
 The connection is configured through [`TARGET_ORIGIN` and `ORIGIN_UPSTREAM`](https://github.com/misbah7172/AgentBridge--External-WebMCP-NoAPI-Adapter/blob/main/.env.example). The Worker code performs the [origin comparison, upstream proxy, HTML injection, and bridge serving](https://github.com/misbah7172/AgentBridge--External-WebMCP-NoAPI-Adapter/blob/main/worker/index.ts). The destination contract is owned by the [origin application](https://github.com/misbah7172/AgentBridge--External-WebMCP-Powered-E-Commerce-Platform-NoAPI), including its [product search route](https://github.com/misbah7172/AgentBridge--External-WebMCP-Powered-E-Commerce-Platform-NoAPI/blob/main/app/api/products/search/route.ts), [cart routes](https://github.com/misbah7172/AgentBridge--External-WebMCP-Powered-E-Commerce-Platform-NoAPI/tree/main/app/api/cart), and [checkout route](https://github.com/misbah7172/AgentBridge--External-WebMCP-Powered-E-Commerce-Platform-NoAPI/blob/main/app/api/checkout/route.ts).
 
+### Current Demonstration Endpoint
+
+Use the deployed Worker URL for the adapter demonstration: [https://agentbridge-webmcp-noapi-adapter.agentbridge-noapi.workers.dev/](https://agentbridge-webmcp-noapi-adapter.agentbridge-noapi.workers.dev/). It proxies the Render-hosted origin at [https://agentbridge-external-webmcp-powered-e.onrender.com/](https://agentbridge-external-webmcp-powered-e.onrender.com/) and injects the bridge into the proxied HTML response.
+
+The Worker is not yet attached to a registered custom application domain because domain registration and route configuration are pending. Therefore, do **not** use the direct Render URL for the WebMCP demonstration; open the Worker URL above, sign in there, and keep that hostname open while using the browser agent. A session created directly on the Render hostname is a separate browser-origin session.
+
 ## 7. Agent ↔ Browser ↔ WebMCP Flow
 
 ```text
@@ -128,7 +134,7 @@ No E2E benchmark has been run. The implementation has passed `npx tsc --noEmit`;
 
 ## 23. Demo
 
-Start the [origin application](https://github.com/misbah7172/AgentBridge--External-WebMCP-Powered-E-Commerce-Platform-NoAPI#29-running-the-application), route the Worker on its hostname, sign in, then perform search, cart, and confirmation-protected checkout as described in [Section 7](#7-agent--browser--webmcp-flow).
+Open the [deployed Worker endpoint](https://agentbridge-webmcp-noapi-adapter.agentbridge-noapi.workers.dev/) rather than the direct [Render origin](https://agentbridge-external-webmcp-powered-e.onrender.com/). Sign in through the Worker endpoint using the [seeded demonstration account](https://github.com/misbah7172/AgentBridge--External-WebMCP-Powered-E-Commerce-Platform-NoAPI#23-demo), then perform search, cart, and confirmation-protected checkout as described in [Section 7](#7-agent--browser--webmcp-flow).
 
 ## 24. Screenshots / Demo GIF / Video
 
@@ -166,6 +172,13 @@ copy .env.example .dev.vars
 | `ORIGIN_UPSTREAM` | Production | Upstream origin behind the Worker, preventing proxy recursion |
 
 Use the committed [environment template](https://github.com/misbah7172/AgentBridge--External-WebMCP-NoAPI-Adapter/blob/main/.env.example). Do not commit `.dev.vars`.
+
+For the current `workers.dev` demonstration deployment, use:
+
+```dotenv
+TARGET_ORIGIN=https://agentbridge-webmcp-noapi-adapter.agentbridge-noapi.workers.dev
+ORIGIN_UPSTREAM=https://agentbridge-external-webmcp-powered-e.onrender.com
+```
 
 ## 29. Running the Application
 
