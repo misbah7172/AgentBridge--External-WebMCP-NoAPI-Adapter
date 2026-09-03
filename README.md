@@ -12,7 +12,7 @@ Traditional websites offer human-facing interfaces and REST APIs but are not aut
 
 ## 3. Solution / Approach
 
-The adapter defines a fixed, reviewed registry for one known application. It injects a same-origin bridge, validates known inputs, calls only fixed API paths, and requires explicit confirmation for consequential operations.
+The adapter defines a fixed, reviewed registry for one known application. The [Cloudflare Worker](https://github.com/misbah7172/AgentBridge--External-WebMCP-NoAPI-Adapter/blob/main/worker/index.ts) verifies the configured hostname, proxies the target response, injects a bridge from the same hostname, and exposes only mapped AgentBridge API operations. The typed [registry source](https://github.com/misbah7172/AgentBridge--External-WebMCP-NoAPI-Adapter/blob/main/src/registry/toolRegistry.ts), [API executor](https://github.com/misbah7172/AgentBridge--External-WebMCP-NoAPI-Adapter/blob/main/src/executors/apiExecutor.ts), and [confirmation policy](https://github.com/misbah7172/AgentBridge--External-WebMCP-NoAPI-Adapter/blob/main/src/security/permissions.ts) make those boundaries reviewable.
 
 ## 4. What is WebMCP?
 
@@ -25,20 +25,39 @@ WebMCP provides explicit actions, schemas, and descriptions instead of relying o
 ## 6. System Architecture
 
 ```text
-Agent → WebMCP-capable browser → Cloudflare edge injection
-      → same-origin bridge → fixed AgentBridge REST endpoints → PostgreSQL-backed origin
+                         public AgentBridge hostname
+┌─────────┐         ┌─────────────────────┐         ┌───────────────────────┐
+│  Agent  │ ──────► │ WebMCP-capable      │ ──────► │ Cloudflare Worker     │
+│         │ tools   │ browser             │ request │ validates target      │
+└─────────┘         └─────────┬───────────┘         └───────────┬───────────┘
+                              │                                 │ proxy HTML
+                              │ loads injected bridge            ▼
+                              │                      ┌───────────────────────┐
+                              └────────────────────► │ AgentBridge NoAPI     │
+                                    same-origin API   │ Next.js REST API      │
+                                    + session cookie  └───────────┬───────────┘
+                                                                    ▼
+                                                               PostgreSQL
 ```
 
-The edge implementation is [the Worker](https://github.com/misbah7172/AgentBridge--External-WebMCP-NoAPI-Adapter/blob/main/worker/index.ts); the target's API is owned by the [origin application](https://github.com/misbah7172/AgentBridge--External-WebMCP-Powered-E-Commerce-Platform-NoAPI).
+The connection is configured through [`TARGET_ORIGIN` and `ORIGIN_UPSTREAM`](https://github.com/misbah7172/AgentBridge--External-WebMCP-NoAPI-Adapter/blob/main/.env.example). The Worker code performs the [origin comparison, upstream proxy, HTML injection, and bridge serving](https://github.com/misbah7172/AgentBridge--External-WebMCP-NoAPI-Adapter/blob/main/worker/index.ts). The destination contract is owned by the [origin application](https://github.com/misbah7172/AgentBridge--External-WebMCP-Powered-E-Commerce-Platform-NoAPI), including its [product search route](https://github.com/misbah7172/AgentBridge--External-WebMCP-Powered-E-Commerce-Platform-NoAPI/blob/main/app/api/products/search/route.ts), [cart routes](https://github.com/misbah7172/AgentBridge--External-WebMCP-Powered-E-Commerce-Platform-NoAPI/tree/main/app/api/cart), and [checkout route](https://github.com/misbah7172/AgentBridge--External-WebMCP-Powered-E-Commerce-Platform-NoAPI/blob/main/app/api/checkout/route.ts).
 
 ## 7. Agent ↔ Browser ↔ WebMCP Flow
 
-1. The user signs in to AgentBridge NoAPI in the browser.
-2. The Worker injects the bridge into HTML served on the configured target origin.
-3. The bridge registers fixed tools with the browser's WebMCP interface.
-4. An agent discovers a tool and submits schema-valid structured input.
-5. The bridge makes a same-origin API call using the browser's existing session.
-6. The API response is returned as structured tool output; confirmation is required before destructive or transactional actions.
+```text
+1. Browser requests https://shop.example/path
+2. Cloudflare route invokes Worker
+3. Worker requires request origin === TARGET_ORIGIN
+4. Worker fetches ORIGIN_UPSTREAM/path and injects /__agentbridge/webmcp-bridge.js
+5. Browser loads that bridge from https://shop.example (not a third-party origin)
+6. Bridge calls document.modelContext.registerTool(...)
+7. Agent discovers a registered tool and submits structured input
+8. Tool executes fetch('/api/...', { credentials: 'same-origin' })
+9. AgentBridge validates session and request, then returns structured JSON
+10. Bridge returns that result to the browser agent
+```
+
+The key security property is that the bridge uses a relative API URL on the authenticated application hostname. The browser attaches the HTTP-only session cookie to the origin request; neither the Worker bridge nor the agent reads the cookie. The runtime bridge is served by the [Worker](https://github.com/misbah7172/AgentBridge--External-WebMCP-NoAPI-Adapter/blob/main/worker/index.ts); the typed registration reference is [webmcpBridge.ts](https://github.com/misbah7172/AgentBridge--External-WebMCP-NoAPI-Adapter/blob/main/src/bridge/webmcpBridge.ts).
 
 ## 8. WebMCP Tools
 
@@ -49,15 +68,15 @@ The edge implementation is [the Worker](https://github.com/misbah7172/AgentBridg
 | Destructive | `remove_from_cart`, `clear_cart`, `cancel_order` |
 | Transactional | `checkout` |
 
-See the authoritative [tool registry](https://github.com/misbah7172/AgentBridge--External-WebMCP-NoAPI-Adapter/blob/main/src/registry/toolRegistry.ts).
+See the typed [tool registry](https://github.com/misbah7172/AgentBridge--External-WebMCP-NoAPI-Adapter/blob/main/src/registry/toolRegistry.ts), the runtime [injected bridge in the Worker](https://github.com/misbah7172/AgentBridge--External-WebMCP-NoAPI-Adapter/blob/main/worker/index.ts), and the origin's [OpenAPI route](https://github.com/misbah7172/AgentBridge--External-WebMCP-Powered-E-Commerce-Platform-NoAPI/blob/main/app/openapi.json/route.ts).
 
 ## 9. Tool Discovery
 
-Registration is feature-detected at runtime. If `document.modelContext` is unavailable, the bridge registers no tools and reports that WebMCP is unavailable; the human website continues to work normally.
+Registration is feature-detected at runtime. If `document.modelContext` is unavailable, the bridge registers no tools; the human website continues to work normally. The registration lifecycle is implemented in the typed [bridge module](https://github.com/misbah7172/AgentBridge--External-WebMCP-NoAPI-Adapter/blob/main/src/bridge/webmcpBridge.ts) and the injected runtime equivalent in the [Worker](https://github.com/misbah7172/AgentBridge--External-WebMCP-NoAPI-Adapter/blob/main/worker/index.ts).
 
 ## 10. Tool Schemas & Contracts
 
-Every tool has a JSON Schema object with named properties, required fields, and `additionalProperties: false`. Tool-to-endpoint mappings are fixed in the [registry](https://github.com/misbah7172/AgentBridge--External-WebMCP-NoAPI-Adapter/blob/main/src/registry/toolRegistry.ts) and the origin contract is exposed at [`/openapi.json`](http://localhost:3000/openapi.json) during local development.
+Every tool has a JSON Schema object with named properties, required fields, and `additionalProperties: false`. Tool-to-endpoint mappings are fixed in the [registry](https://github.com/misbah7172/AgentBridge--External-WebMCP-NoAPI-Adapter/blob/main/src/registry/toolRegistry.ts); endpoint execution is constrained by the [API executor](https://github.com/misbah7172/AgentBridge--External-WebMCP-NoAPI-Adapter/blob/main/src/executors/apiExecutor.ts). The origin contract is exposed by the [OpenAPI route](https://github.com/misbah7172/AgentBridge--External-WebMCP-Powered-E-Commerce-Platform-NoAPI/blob/main/app/openapi.json/route.ts), available locally at [`http://localhost:3000/openapi.json`](http://localhost:3000/openapi.json).
 
 ## 11. Agent Interaction / User Journeys
 
@@ -69,7 +88,7 @@ The current implementation registers the complete fixed tool set when WebMCP is 
 
 ## 13. Error Handling & Safety
 
-The API executor accepts only `/api/` paths, normalizes JSON responses, and uses `credentials: "same-origin"`. The origin returns consistent `{ success, data }` or `{ success, error }` envelopes. No tool reads cookies, requests credentials, or permits arbitrary headers, methods, URLs, or request bodies.
+The [API executor](https://github.com/misbah7172/AgentBridge--External-WebMCP-NoAPI-Adapter/blob/main/src/executors/apiExecutor.ts) accepts only `/api/` paths, normalizes JSON responses, and uses `credentials: "same-origin"`. The [origin response helper](https://github.com/misbah7172/AgentBridge--External-WebMCP-Powered-E-Commerce-Platform-NoAPI/blob/main/lib/api-response.ts) returns consistent `{ success, data }` or `{ success, error }` envelopes. No tool reads cookies, requests credentials, or permits arbitrary headers, methods, URLs, or request bodies.
 
 ## 14. Multi-Step Tool Execution
 
