@@ -1,4 +1,5 @@
 name = "agentbridge-webmcp-adapter-noapi"
+account_id = "e484537a493a0d27262df4e998a5ca2d"
 main = "worker/index.ts"
 compatibility_date = "2026-09-02"
 
